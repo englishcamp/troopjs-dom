@@ -134,7 +134,7 @@ define([
 				args = matches[4];
 
 				// module name, DOM element, widget display name.
-				weave_args = [ matches[2], $element.get(0), matches[3] ];
+				weave_args = [ matches[2], $element, matches[3] ];
 
 				// Store matches[1] as WEAVE on weave_args
 				weave_args[WEAVE] = matches[1];
@@ -178,8 +178,18 @@ define([
 							resolver.reject(CANCELED);
 						}
 
+						var isOldTroop = "trigger" in Widget.prototype;
+
 						try {
-							// Create widget instance
+
+							// Is this widget from TroopJS 1.x?
+							if (isOldTroop) {
+								// Unwrap the DOM element as it might be using
+								// a different version of jQuery.
+								widget_args[0] = widget_args[0].get(0);
+							}
+
+								// Create widget instance
 							widget = Widget.apply(Widget, widget_args);
 
 							// Add $WEFT to widget
@@ -188,8 +198,8 @@ define([
 							// Add WOVEN to promise
 							promise[WOVEN] = widget.toString();
 
-							// TODO: Detecting TroopJS 1.x widget from *version* property.
-							if (widget.trigger) {
+							// Is this widget from TroopJS 1.x?
+							if (isOldTroop) {
 								deferred = Defer();
 								widget.start(deferred);
 								startPromise = deferred.promise;

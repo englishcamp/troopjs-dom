@@ -11,7 +11,7 @@ define([ "troopjs-dom/component/widget"], function BarWidgetModule(Widget) {
 	 * A simple widget for test.
 	 */
 	return Widget.extend(function ($el, name, arg1, arg2) {
-		assert('foobar', $el.className);
+		assert($el.attr("class"), 'foobar');
 		assert.same(this.displayName, name);
 		assert.same(123, arg1);
 		assert.same("abc", arg2);

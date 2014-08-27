@@ -178,18 +178,9 @@ define([
 							resolver.reject(CANCELED);
 						}
 
-						var isOldTroop = "trigger" in Widget.prototype;
+                        try {
 
-						try {
-
-							// Is this widget from TroopJS 1.x?
-							if (isOldTroop) {
-								// Unwrap the DOM element as it might be using
-								// a different version of jQuery.
-								widget_args[0] = widget_args[0].get(0);
-							}
-
-								// Create widget instance
+						    // Create widget instance
 							widget = Widget.apply(Widget, widget_args);
 
 							// Add $WEFT to widget
@@ -199,7 +190,7 @@ define([
 							promise[WOVEN] = widget.toString();
 
 							// Is this widget from TroopJS 1.x?
-							if (isOldTroop) {
+							if ("trigger" in Widget.prototype) {
 								deferred = Defer();
 								widget.start(deferred);
 								startPromise = deferred.promise;

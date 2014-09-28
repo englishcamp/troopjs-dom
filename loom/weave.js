@@ -7,9 +7,8 @@ define([
 	"when",
 	"jquery",
 	"troopjs-util/getargs",
-	"troopjs-util/defer",
 	"poly/array"
-], function WeaveModule(config, parentRequire, when, $, getargs, Defer) {
+], function WeaveModule(config, parentRequire, when, $, getargs) {
 	"use strict";
 
 	/**
@@ -24,7 +23,7 @@ define([
 	var ARRAY_PROTO = Array.prototype;
 	var ARRAY_MAP = ARRAY_PROTO.map;
 	var ARRAY_PUSH = ARRAY_PROTO.push;
-	var ARRAY_SHIFT = ARRAY_PROTO.shift;
+	var MODULE = "module";
 	var WEAVE = "weave";
 	var WOVEN = "woven";
 	var LENGTH = "length";
@@ -33,20 +32,6 @@ define([
 	var ATTR_WEAVE = config[WEAVE];
 	var ATTR_WOVEN = config[WOVEN];
 	var RE_SEPARATOR = /[\s,]+/;
-	var CANCELED = "cancel";
-
-	// collect the list of fulfilled promise values from a list of descriptors.
-	function fulfilled(descriptors) {
-		return descriptors.filter(function(d) {
-			// Re-throw the rejection if it's not canceled.
-			if (d.state === "rejected" && d.reason !== CANCELED) {
-				throw d.reason;
-			}
-			return d.state === "fulfilled";
-		}).map(function(d) {
-			return d.value;
-		});
-	}
 
 	/**
 	 * Instantiate all {@link dom.component.widget widgets}  specified in the {@link dom.loom.config#weave weave attribute}
@@ -63,154 +48,141 @@ define([
 	 *
 	 * **Note:** It's not commonly to use this method directly, use instead {@link $#method-weave jQuery.fn.weave}.
 	 *
-	 * 	// Create element for weaving.
-	 * 	var $el = $('<div data-weave="my/widget(option)"></div>').data("option",{"foo":"bar"});
+	 * 	// Create element for weaving
+	 * 	var $el = $('<div data-weave="my/widget(option)"></div>')
+	 * 	// Populate `data`
+	 * 	.data("option",{"foo":"bar"})
 	 * 	// Instantiate the widget defined in "my/widget" module, with one param read from the element's custom data.
-	 * 	$el.weave();
+	 * 	.weave();
 	 *
 	 * @method constructor
 	 * @param {...*} [start_args] Arguments that will be passed to each widget's {@link dom.component.widget#start start} method
 	 * @return {Promise} Promise for the completion of weaving all widgets.
 	 */
-	return function weave(start_args) {
+	return function weave() {
 		// Store start_args for later
-		start_args = arguments;
-
-		// Map elements
-		return when.all(ARRAY_MAP.call(this, function (element) {
-			var $element = $(element);
-			var $data = $element.data();
-			var $warp = $data[$WARP] || ($data[$WARP] = []);
-			var to_weave = [];
-			var weave_attr = $element.attr(ATTR_WEAVE) || "";
-			var weave_args;
-			var re = /[\s,]*(((?:\w+!)?([\w\d_\/\.\-]+)(?:#[^(\s]+)?)(?:\(([^\)]+)\))?)/g;
-			var matches;
-
-			/*
-			 * Updated attributes according to what have been weaved.
-			 * @param {object} widgets List of started widgets.
+		var start_args = arguments;
+		/**
+		 * Weaves `$element`
+		 * @param {jQuery} $element
+		 * @param {String} weave_attr
+		 * @return {Promise}
+		 * @private
+		 */
+		var $weave = function ($element, weave_attr) {
+			/**
+			 * Maps `value` to `$data[value]`
+			 * @param {*} value
+			 * @return {*}
 			 * @private
 			 */
-			var update_attr = function (widgets) {
-				var woven = [];
-				var weaved = [];
-
-				widgets.forEach(function (widget) {
-					weaved.push(widget[$WEFT][WEAVE]);
-					woven.push(widget[$WEFT][WOVEN]);
-				});
-
-				$element
-					// Add those widgets to data-woven.
-					.attr(ATTR_WOVEN, function (index, attr) {
-						attr = (attr !== UNDEFINED ? attr.split(RE_SEPARATOR) : []).concat(woven).join(" ");
-						return attr || null;
-					})
-					// Remove only those actually woven widgets from "data-weave".
-					.attr(ATTR_WEAVE, function(index, attr) {
-						var result = [];
-						if (attr !== UNDEFINED) {
-							result = to_weave.filter(function(args) {
-								return weaved.indexOf(args[WEAVE]) < 0;
-							}).map(function(args) { return args[WEAVE]; });
-						}
-						return result[LENGTH] === 0 ? null : result.join(" ");
-					});
+			var $map = function (value) {
+				return $data.hasOwnProperty(value)
+					? $data[value]
+					: value;
 			};
+			// Let `$data` be `$element.data()`
+			var $data = $element.data();
+			// Let `weave_re` be scoped locally since we use the `g` flag
+			var weave_re = /[\s,]*(((?:\w+!)?([\w\d_\/\.\-]+)(?:#[^(\s]+)?)(?:\(([^\)]+)\))?)/g;
+			// Let `weave_args` be `[]`
+			var weave_args = [];
+			var weave_arg;
+			var weave_arg_add;
+			var matches;
 
-			var args;
-
-			// Iterate weave_attr (while re matches)
+			// Iterate `weave_attr` (while `weave_re` matches)
 			// matches[1] : full widget module name (could be loaded from plugin) - "mv!widget/name#1.x(1, 'string', false)"
 			// matches[2] : widget name and arguments - "widget/name(1, 'string', false)"
 			// matches[3] : widget name - "widget/name"
 			// matches[4] : widget arguments - "1, 'string', false"
-			while ((matches = re.exec(weave_attr)) !== NULL) {
-				/*jshint loopfunc:true*/
-				// Create weave_args
-				// Require module, add error handler
-				// Arguments to pass to the widget constructor.
-				args = matches[4];
-
-				// module name, DOM element, widget display name.
-				weave_args = [ matches[2], $element.get(0), matches[3] ];
-
-				// Store matches[1] as WEAVE on weave_args
-				weave_args[WEAVE] = matches[1];
-
-				// If there were additional arguments
-				if (args !== UNDEFINED) {
-					// Parse matches[2] using getargs, map the values and append to weave_args
-					ARRAY_PUSH.apply(weave_args, getargs.call(args).map(function (value) {
-						// If value from $data if key exist
-						return value in $data
-							? $data[value]
-							: value;
-					}));
+			while ((matches = weave_re.exec(weave_attr)) !== NULL) {
+				// Let `weave_arg` be [ $element, widget display name ].
+				weave_arg = [ $element, matches[3]];
+				// Let `weave_arg[WEAVE]` be `matches[1]`
+				weave_arg[WEAVE] = matches[1];
+				// Let `weave_arg[MODULE]` be `matches[3]`
+				weave_arg[MODULE] = matches[3];
+				// If there were additional arguments ...
+				if ((weave_arg_add = matches[4]) !== UNDEFINED) {
+					// .. parse them using `getargs`, `.map` the values with `$map` and push to `weave_arg`
+					ARRAY_PUSH.apply(weave_arg, getargs.call(weave_arg_add).map($map));
 				}
-
-				// Push on $weave
-				ARRAY_PUSH.call(to_weave, weave_args);
+				// Push `weave_arg` on `weave_args`
+				weave_args.push(weave_arg);
 			}
 
-			// process with all successful weaving.
-			return when.settle(to_weave.map(function (widget_args) {
-				// Create deferred
-				var deferred = when.defer();
-				var resolver = deferred.resolver;
-				var promise = deferred.promise;
-				var module = ARRAY_SHIFT.call(widget_args);
+			return when
+				// Map `weave_args` (async)
+				.map(weave_args, function (args) {
+					// Let `deferred` be `when.defer()`
+					var deferred = when.defer();
 
-				// Copy WEAVE
-				promise[WEAVE] = widget_args[WEAVE];
+					// Extract `resolve`, `reject` from `deferred`
+					var resolve = deferred.resolve;
+					var reject = deferred.reject;
 
-				// Add promise to $warp, make sure this is called synchronously.
-				ARRAY_PUSH.call($warp, promise);
-
-				setTimeout(function() {
-					parentRequire([ module ], function(Widget) {
+					// Require `weave_arg[MODULE]`
+					parentRequire([ args[MODULE] ], function (Widget) {
 						var widget;
-						var startPromise;
+						var $deferred;
 
-						// detect if weaving has been canceled somehow.
-						if ($warp.indexOf(promise) === -1) {
-							resolver.reject(CANCELED);
+						// Create widget instance
+						widget = Widget.apply(Widget, args);
+
+						if (widget.trigger) {
+							// Let `$deferred` be `$.Deferred()`
+							$deferred = $.Deferred();
+
+							// Get trusted promise
+							when($deferred)
+								// Yield
+								.yield(widget)
+								// Link
+								.then(resolve, reject);
+
+							// Start widget
+							widget.start.call(widget, $deferred);
 						}
-
-						try {
-							// Create widget instance
-							widget = Widget.apply(Widget, widget_args);
-
-							// Add $WEFT to widget
-							widget[$WEFT] = promise;
-
-							// Add WOVEN to promise
-							promise[WOVEN] = widget.toString();
-
-							// TODO: Detecting TroopJS 1.x widget from *version* property.
-							if (widget.trigger) {
-								deferred = Defer();
-								widget.start(deferred);
-								startPromise = deferred.promise;
-							}
-							else {
-								startPromise = widget.start.apply(widget, start_args);
-							}
-
-							resolver.resolve(startPromise.yield(widget));
+						else {
+							// Start widget
+							widget.start.apply(widget, start_args)
+								// Yield
+								.yield(widget)
+								// Link
+								.then(resolve, reject);
 						}
-						catch (e) {
-							resolver.reject(e);
-						}
-					}, resolver.reject);
-				}, 0);
+					}, reject);
 
-				// Return promise
-				return promise;
-			})).then(fulfilled)
-			// Updating the element attributes with started widgets.
-			.tap(update_attr);
+					// Return `deferred.promise`
+					return deferred.promise;
+				})
+				.tap(function (widgets) {
+					// Map `Widget[]` to `String[]`
+					var woven = widgets.map(function (widget) {
+						return widget.toString();
+					});
+
+					// Update `$element` attribute `ATTR_WOVEN`
+					$element.attr(ATTR_WOVEN, function (index, attr) {
+						attr = (attr === UNDEFINED ? ARRAY_PROTO : attr.split(RE_SEPARATOR))
+							.concat(woven)
+							.join(" ");
+
+						return attr || NULL;
+					});
+				});
+		};
+
+		return when.all(ARRAY_MAP.call(this, function (element) {
+			// Let `$element` be `element` wrapped in `$`
+			var $element = $(element);
+			// Let `weave_attr` be `$element.attr(ATTR_WEAVE)` or `""`
+			var weave_attr = $element.attr(ATTR_WEAVE) || "";
+			// Make sure to remove ATTR_WEAVE asap in case someone else tries to `weave` again
+			$element.removeAttr(ATTR_WEAVE);
+			// Attempt weave
+			return when.attempt($weave, $element, weave_attr);
 		}));
-	};
+	}
 });

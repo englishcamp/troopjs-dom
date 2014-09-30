@@ -3,8 +3,9 @@
  */
 define([
 	"../component/widget",
-	"when"
-], function ApplicationWidgetModule(Widget, when) {
+	"when",
+	"when/sequence"
+], function ApplicationWidgetModule(Widget, when, sequence) {
 	"use strict";
 
 	/**
@@ -37,19 +38,6 @@ define([
 
 		/**
 		 * @handler
-		 * @localdoc Initialize all registered components (widgets and services) that are passed in from the {@link #method-constructor}.
-		 * @inheritdoc
-		 */
-		"sig/initialize" : function onInitialize() {
-			var args = arguments;
-
-			return when.map(this[COMPONENTS], function (component) {
-				return component.signal("initialize", args);
-			});
-		},
-
-		/**
-		 * @handler
 		 * @localdoc weave all widgets that are within this element.
 		 * @inheritdoc
 		 */
@@ -57,10 +45,10 @@ define([
 			var me = this;
 			var args = arguments;
 
-			return when
-				.map(me[COMPONENTS], function (component) {
-					return component.signal("start", args);
-				}).then(function started() {
+			// start the components in sequence.
+			return sequence(me[COMPONENTS].map(function (component) {
+					return function task() { return component.start.apply(component, args); };
+			})).then(function started() {
 					return me.weave.apply(me, args);
 				});
 		},
@@ -75,22 +63,9 @@ define([
 			var args = arguments;
 
 			return me.unweave.apply(me, args).then(function stopped() {
-				return when.map(me[COMPONENTS], function (child) {
-					return child.signal("stop", args);
+				return when.map(me[COMPONENTS], function (component) {
+					return component.stop.apply(component, args);
 				});
-			});
-		},
-
-		/**
-		 * @handler
-		 * @localdoc finalize all registered components (widgets and services) that are registered from the {@link #method-constructor}.
-		 * @inheritdoc
-		 */
-		"sig/finalize" : function onFinalize() {
-			var args = arguments;
-
-			return when.map(this[COMPONENTS], function (component) {
-				return component.signal("finalize", args);
 			});
 		}
 	});

@@ -99,6 +99,9 @@ define([
 				widgets.forEach(function (widget) {
 					weaved.push(widget[$WEFT][WEAVE]);
 					woven.push(widget[$WEFT][WOVEN]);
+					// cleanup $warp
+					$warp.splice($warp.indexOf(widget[$WEFT]), 1);
+					delete widget[$WEFT];
 				});
 
 				$element
@@ -138,6 +141,13 @@ define([
 
 				// Store matches[1] as WEAVE on weave_args
 				weave_args[WEAVE] = matches[1];
+
+				// check $warp see if there's a weaving in progress
+				if ($warp.filter(function(promise) {
+					return promise[WEAVE] === weave_args[WEAVE];
+				}).length) {
+					continue;
+				}
 
 				// If there were additional arguments
 				if (args !== UNDEFINED) {

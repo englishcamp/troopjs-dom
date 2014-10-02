@@ -99,9 +99,6 @@ define([
 				widgets.forEach(function (widget) {
 					weaved.push(widget[$WEFT][WEAVE]);
 					woven.push(widget[$WEFT][WOVEN]);
-					// cleanup $warp
-					$warp.splice($warp.indexOf(widget[$WEFT]), 1);
-					delete widget[$WEFT];
 				});
 
 				$element
@@ -188,9 +185,8 @@ define([
 							resolver.reject(CANCELED);
 						}
 
-                        try {
-
-						    // Create widget instance
+						try {
+							// Create widget instance
 							widget = Widget.apply(Widget, widget_args);
 
 							// Add $WEFT to widget

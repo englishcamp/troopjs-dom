@@ -116,15 +116,18 @@ define([
 		 * @handler hub/route/set
 		 * @return {Promise}
 		 */
-		"hub/route/set": function (path, data, silent) {
+		"hub/route/set": function (path, data, options) {
+			options = options || {};
 			var me = this;
+			var silent = options.silent;
+			var replace = options.replace;
 
 			// If we are silent we update the local me[HASH] to prevent change detection
-			if (silent === true) {
+			if (silent) {
 				me[HASH] = path;
 			}
 
-			me[$ELEMENT].get(0).location.hash = path;
+			me[$ELEMENT].get(0).location[replace? 'replace': 'assign']('#'+ path);
 		}
 	});
 });

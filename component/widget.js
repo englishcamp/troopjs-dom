@@ -231,6 +231,7 @@ define([
 		 */
 		"sig/task" : function onTask(task) {
 			this[$ELEMENT].trigger("task", [ task ]);
+			return false;
 		},
 
 		/**

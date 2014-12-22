@@ -86,19 +86,28 @@ define([
 		 * @param {Object} $event {@link jQuery} event
 		 * @fires hub/route/change
 		 */
-		"dom/hashchange": function ($event) {
+		"dom/hashchange" : function ($event) {
 			var me = this;
 			var hash = me[$ELEMENT].get(0).location.hash.replace(RE, "");
 
 			// Did anything change?
-			if (hash !== me[HASH]) {
+			if (me.isNewHash(hash)) {
 				// Store and publish new hash
 				me.publish("route/change", me[HASH] = hash);
-			}
-			else {
+			} else {
 				// Prevent further hashchange handlers from receiving this
 				$event.stopImmediatePropagation();
 			}
+		},
+
+		/**
+		 * Compare with normalization if the hash is a new one, comparing to what has been cached before.
+		 * @private
+		 */
+		isNewHash : function (hash) {
+			// the hash could contain semi-path "#foo=/bar=" where each segment is encoded
+			// separately, compare with with the decoded version
+			return decodeURIComponent(hash) !== decodeURIComponent(this[HASH]);
 		},
 
 		/**
@@ -107,7 +116,7 @@ define([
 		 * @localdoc Handles setting hash of the attached {@link #$element}
 		 * @handler
 		 */
-		"dom/hashset": function ($event, hash, silent) {
+		"dom/hashset" : function ($event, hash, silent) {
 			this.publish("route/set", hash, null, silent);
 		},
 
@@ -116,7 +125,7 @@ define([
 		 * @handler hub/route/set
 		 * @return {Promise}
 		 */
-		"hub/route/set": function (path, data, options) {
+		"hub/route/set" : function (path, data, options) {
 			options = options || {};
 			var me = this;
 			var silent = options.silent;
@@ -127,7 +136,7 @@ define([
 				me[HASH] = path;
 			}
 
-			me[$ELEMENT].get(0).location[replace? 'replace': 'assign']('#'+ path);
+			me[$ELEMENT].get(0).location[replace ? 'replace' : 'assign']('#' + path);
 		}
 	});
 });
